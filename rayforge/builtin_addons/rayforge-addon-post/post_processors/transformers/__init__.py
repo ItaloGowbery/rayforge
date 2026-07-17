@@ -13,6 +13,7 @@ from .optimize_transformer import Optimize
 from .overscan_transformer import OverscanTransformer
 from .smooth_transformer import Smooth
 from .tabs_transformer import TabOpsTransformer
+from .unidirectional_scan_transformer import UnidirectionalScanTransformer
 
 __all__ = [
     "CropTransformer",
@@ -23,4 +24,5 @@ __all__ = [
     "OverscanTransformer",
     "Smooth",
     "TabOpsTransformer",
+    "UnidirectionalScanTransformer",
 ]

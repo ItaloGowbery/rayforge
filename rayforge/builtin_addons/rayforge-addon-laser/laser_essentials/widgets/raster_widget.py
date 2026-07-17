@@ -372,6 +372,25 @@ class RasterSettingsWidget(DebounceMixin, StepComponentSettingsWidget):
         )
         group.add(self.sample_interval_row)
 
+        self.unidirectional_scan_row = Adw.SwitchRow(
+            title=_("Unidirectional Scan"),
+            subtitle=_(
+                "Always scan in the same direction, avoiding backlash "
+                "on the scan axis (e.g. a rotary attachment). Slower, "
+                "since it adds a return move for every other line. "
+                "Also disables “Allow Flipping” on the Optimize "
+                "step, which would otherwise reverse lines back."
+            ),
+        )
+        self.unidirectional_scan_row.set_active(producer.unidirectional_scan)
+        self.unidirectional_scan_row.connect(
+            "notify::active", self._on_unidirectional_scan_changed
+        )
+        group.add(self.unidirectional_scan_row)
+        # Keep Optimize's "Allow Flipping" in sync even for
+        # projects/steps saved before this switch existed.
+        self._sync_unidirectional_transformers(producer.unidirectional_scan)
+
         self.invert_row = Adw.SwitchRow(
             title=_("Invert"),
             subtitle=_("Engrave white areas instead of black areas"),
@@ -593,6 +612,95 @@ class RasterSettingsWidget(DebounceMixin, StepComponentSettingsWidget):
         if value is not None and value <= 0:
             value = None
         self._on_param_changed("sample_interval_mm", value)
+
+    def _on_unidirectional_scan_changed(self, w, pspec):
+        unidirectional = w.get_active()
+        self._on_param_changed("unidirectional_scan", unidirectional)
+        self._sync_unidirectional_transformers(unidirectional)
+
+    def _sync_unidirectional_transformers(self, unidirectional: bool):
+        """
+        Two things run after the raster is generated that can undo
+        unidirectional scanning if left as-is:
+
+        - Optimize reorders/reverses scan-line segments to shorten
+          travel - even with flipping disabled, reordering alone can
+          still make the scan axis jump out of sequence. So it's
+          turned off entirely while unidirectional scanning is active.
+        - UnidirectionalScanTransformer is the transformer that
+          actually enforces a single travel direction across the
+          whole assembled step (not just within one raster chunk), so
+          it needs to be enabled together with this switch.
+
+        Keep both in sync so toggling this switch doesn't require also
+        hunting down those settings separately.
+        """
+        for t_dict in self.step.per_workpiece_transformers_dicts or []:
+            if t_dict.get("name") != "Optimize":
+                continue
+            self.editor.step.set_step_param(
+                target_dict=t_dict,
+                key="allow_flip",
+                new_value=not unidirectional,
+                name=_("Change engraving setting"),
+                on_change_callback=lambda: self.step.updated.send(
+                    self.step
+                ),
+            )
+            self.editor.step.set_step_param(
+                target_dict=t_dict,
+                key="enabled",
+                new_value=not unidirectional,
+                name=_("Change engraving setting"),
+                on_change_callback=lambda: self.step.updated.send(
+                    self.step
+                ),
+            )
+
+        per_step = self.step.per_step_transformers_dicts
+        if per_step is None:
+            per_step = []
+            self.step.per_step_transformers_dicts = per_step
+
+        found_unidirectional = False
+        for t_dict in per_step:
+            if t_dict.get("name") == "Optimize":
+                self.editor.step.set_step_param(
+                    target_dict=t_dict,
+                    key="allow_flip",
+                    new_value=not unidirectional,
+                    name=_("Change engraving setting"),
+                    on_change_callback=lambda: self.step.updated.send(
+                        self.step
+                    ),
+                )
+                self.editor.step.set_step_param(
+                    target_dict=t_dict,
+                    key="enabled",
+                    new_value=not unidirectional,
+                    name=_("Change engraving setting"),
+                    on_change_callback=lambda: self.step.updated.send(
+                        self.step
+                    ),
+                )
+            elif t_dict.get("name") == "UnidirectionalScanTransformer":
+                found_unidirectional = True
+                self.editor.step.set_step_param(
+                    target_dict=t_dict,
+                    key="enabled",
+                    new_value=unidirectional,
+                    name=_("Change engraving setting"),
+                    on_change_callback=lambda: self.step.updated.send(
+                        self.step
+                    ),
+                )
+
+        if not found_unidirectional:
+            per_step.append(
+                {"name": "UnidirectionalScanTransformer",
+                 "enabled": unidirectional}
+            )
+            self.step.updated.send(self.step)
 
     def _on_param_changed(self, key: str, value: Any):
         target_dict = self.target_dict.setdefault("params", {})

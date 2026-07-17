@@ -47,9 +47,13 @@ class EngraveStep(Step):
         OverscanTransformer = transformer_registry.get("OverscanTransformer")
         Optimize = transformer_registry.get("Optimize")
         MultiPassTransformer = transformer_registry.get("MultiPassTransformer")
+        UnidirectionalScanTransformer = transformer_registry.get(
+            "UnidirectionalScanTransformer"
+        )
         assert OverscanTransformer is not None
         assert Optimize is not None
         assert MultiPassTransformer is not None
+        assert UnidirectionalScanTransformer is not None
         optimize_dict = Optimize().to_dict()
         return [
             OverscanTransformer(
@@ -58,6 +62,7 @@ class EngraveStep(Step):
             optimize_dict,
         ], [
             optimize_dict,
+            UnidirectionalScanTransformer(enabled=False).to_dict(),
             MultiPassTransformer(passes=1, z_step_down=0.0).to_dict(),
         ]
 

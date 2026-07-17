@@ -1,4 +1,5 @@
 import logging
+import math
 from enum import Enum, auto
 from gettext import gettext as _
 from typing import TYPE_CHECKING, Any, Dict, Optional, Tuple
@@ -9,7 +10,7 @@ from raygeo.image.grayscale import compute_auto_levels, normalize_grayscale
 from raygeo.image.scan import ScanMode
 from raygeo.ops import Ops
 from raygeo.ops.assembly.raster import raster
-from raygeo.ops.types import RasterMode, SectionType
+from raygeo.ops.types import CommandCategory, CommandType, RasterMode, SectionType
 
 from rayforge.image.dither import DitherAlgorithm, surface_to_dithered_array
 from rayforge.image.util import (
@@ -68,6 +69,78 @@ class DepthMode(Enum):
         return _raster_mode_map[self]
 
 
+def _force_unidirectional_scan(ops: Ops, scan_angle_degrees: float) -> None:
+    """
+    Rewrites raster passes in-place so every one travels in the same
+    geometric direction, instead of the default alternating (zigzag)
+    pattern.
+
+    Standard raster engraving alternates direction every line to
+    minimize travel. On machines where the scan axis has mechanical
+    backlash (most commonly a rotary attachment driving one of the
+    axes), that alternation makes every other line land at a slightly
+    different position. This walks the generated passes and, for every
+    pass that runs opposite to the reference direction, repositions
+    (via a non-cutting rapid move) to the far end of the line and
+    re-emits the scan forward, with the power samples reversed so the
+    same pixels are still burned at the same physical location.
+
+    The reference direction is derived from *scan_angle_degrees* (the
+    same convention as the scan-line direction preview), not from the
+    first pass encountered - large images are rasterised in chunks,
+    each processed via a separate call, and consecutive chunks start
+    on opposite legs of the zigzag. Picking the reference per-call
+    would keep each chunk internally consistent but let the direction
+    still flip at chunk boundaries.
+    """
+    angle_rad = math.radians(scan_angle_degrees)
+    forward_dir: Tuple[float, float] = (
+        math.cos(angle_rad),
+        math.sin(angle_rad),
+    )
+
+    source = ops.copy()
+    ops.clear()
+    n = source.len()
+    idx = 0
+    while idx < n:
+        if source.command_type(idx) == CommandType.MOVE_TO:
+            move_end = source.endpoint(idx)
+            j = idx + 1
+            while j < n and source.category(j) == CommandCategory.STATE:
+                j += 1
+            if j < n and source.is_scanline(j):
+                scan_end = source.endpoint(j)
+                dx = scan_end[0] - move_end[0]
+                dy = scan_end[1] - move_end[1]
+
+                dot = dx * forward_dir[0] + dy * forward_dir[1]
+                if dot < 0:
+                    power = list(source.scanline_data(j))[::-1]
+                    ops.move_to(
+                        scan_end[0],
+                        scan_end[1],
+                        scan_end[2],
+                        extra=source.extra_axes(j),
+                    )
+                    for k in range(idx + 1, j):
+                        ops.transfer_command_from(source, k)
+                    ops.scan_to(
+                        move_end[0],
+                        move_end[1],
+                        move_end[2],
+                        power_values=power,
+                        extra=source.extra_axes(idx),
+                    )
+                else:
+                    for k in range(idx, j + 1):
+                        ops.transfer_command_from(source, k)
+                idx = j + 1
+                continue
+        ops.transfer_command_from(source, idx)
+        idx += 1
+
+
 class Rasterizer(OpsProducer):
     """
     Generates raster engraving paths from a grayscale surface.
@@ -98,6 +171,7 @@ class Rasterizer(OpsProducer):
         white_point: int = 255,
         auto_levels: bool = True,
         angle_increment: float = 0.0,
+        unidirectional_scan: bool = False,
     ):
         self.scan_angle = scan_angle
         self.depth_mode = depth_mode
@@ -118,6 +192,7 @@ class Rasterizer(OpsProducer):
         self.white_point = white_point
         self.auto_levels = auto_levels
         self.angle_increment = angle_increment
+        self.unidirectional_scan = unidirectional_scan
         self._computed_auto_levels: Optional[Tuple[int, int]] = None
 
     def prepare(
@@ -311,6 +386,8 @@ class Rasterizer(OpsProducer):
         )
 
         final_ops = result.ops
+        if self.unidirectional_scan:
+            _force_unidirectional_scan(final_ops, self.scan_angle)
         if final_ops.len() > 2:
             head_ops = Ops()
             head_ops.set_head(laser.uid)
@@ -374,6 +451,7 @@ class Rasterizer(OpsProducer):
                 "white_point": self.white_point,
                 "auto_levels": self.auto_levels,
                 "angle_increment": self.angle_increment,
+                "unidirectional_scan": self.unidirectional_scan,
             },
         }
 
@@ -413,6 +491,7 @@ class Rasterizer(OpsProducer):
             "white_point",
             "auto_levels",
             "angle_increment",
+            "unidirectional_scan",
         }
 
         init_args = {k: v for k, v in params_in.items() if k in valid_params}

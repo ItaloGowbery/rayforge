@@ -16,6 +16,7 @@ from .transformers import (
     OverscanTransformer,
     Smooth,
     TabOpsTransformer,
+    UnidirectionalScanTransformer,
 )
 
 ADDON_NAME = "post_processors"
@@ -35,3 +36,6 @@ def register_transformers(transformer_registry):
     transformer_registry.register(OverscanTransformer, addon_name=ADDON_NAME)
     transformer_registry.register(Smooth, addon_name=ADDON_NAME)
     transformer_registry.register(TabOpsTransformer, addon_name=ADDON_NAME)
+    transformer_registry.register(
+        UnidirectionalScanTransformer, addon_name=ADDON_NAME
+    )

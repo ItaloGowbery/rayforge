@@ -389,6 +389,22 @@ class RasterSettingsWidget(DebounceMixin, StepComponentSettingsWidget):
         )
         group.add(self.bidir_x_offset_row)
 
+        self.unidirectional_scan_row = Adw.SwitchRow(
+            title=_("Unidirectional Scan"),
+            subtitle=_(
+                "Always scan in the same direction, avoiding backlash "
+                "on the scan axis (e.g. a rotary attachment). Slower, "
+                "since it adds a return move for every other line."
+            ),
+        )
+        self.unidirectional_scan_row.set_active(
+            self.step.unidirectional_scan
+        )
+        self.unidirectional_scan_row.connect(
+            "notify::active", self._on_unidirectional_scan_changed
+        )
+        group.add(self.unidirectional_scan_row)
+
         self.invert_row = Adw.SwitchRow(
             title=_("Invert"),
             subtitle=_("Engrave white areas instead of black areas"),
@@ -607,6 +623,9 @@ class RasterSettingsWidget(DebounceMixin, StepComponentSettingsWidget):
 
     def _on_bidir_x_offset_changed(self, value: Optional[float]):
         self._on_param_changed("bidir_x_offset_mm", value or 0.0)
+
+    def _on_unidirectional_scan_changed(self, w, pspec):
+        self._on_param_changed("unidirectional_scan", w.get_active())
 
     def _on_param_changed(self, key: str, value: Any):
         self.set_step_property(key, value)

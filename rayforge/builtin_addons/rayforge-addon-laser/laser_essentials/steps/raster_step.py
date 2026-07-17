@@ -78,6 +78,7 @@ class EngraveStep(Step):
         self.angle_increment = 0.0
         self.dither_algorithm = None
         self.bidir_x_offset_mm = 0.0
+        self.unidirectional_scan = False
 
     def get_operation_mode_short(self):
         if not self.depth_mode:
@@ -141,6 +142,7 @@ class EngraveStep(Step):
             self.dither_algorithm.value if self.dither_algorithm else None
         )
         result["bidir_x_offset_mm"] = self.bidir_x_offset_mm
+        result["unidirectional_scan"] = self.unidirectional_scan
         return result
 
     @classmethod
@@ -169,6 +171,7 @@ class EngraveStep(Step):
         if dither_val is not None:
             step.dither_algorithm = DitherAlgorithm(dither_val)
         step.bidir_x_offset_mm = data.get("bidir_x_offset_mm", 0.0)
+        step.unidirectional_scan = data.get("unidirectional_scan", False)
         return step
 
     def prepare(
@@ -311,16 +314,21 @@ class EngraveStep(Step):
         BidirScanOffsetTransformer = transformer_registry.get(
             "BidirScanOffsetTransformer"
         )
+        UnidirectionalScanTransformer = transformer_registry.get(
+            "UnidirectionalScanTransformer"
+        )
         assert OverscanTransformer is not None
         assert Optimize is not None
         assert MultiPassTransformer is not None
         assert BidirScanOffsetTransformer is not None
+        assert UnidirectionalScanTransformer is not None
         optimize_dict = Optimize().to_dict()
         return [
             OverscanTransformer(
                 enabled=True, distance_mm=0, auto=True
             ).to_dict(),
             optimize_dict,
+            UnidirectionalScanTransformer(enabled=True).to_dict(),
             BidirScanOffsetTransformer(enabled=True).to_dict(),
         ], [
             optimize_dict,

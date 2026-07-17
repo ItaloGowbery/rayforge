@@ -126,23 +126,23 @@ gen-affiliate = "python3 scripts/generate_affiliate_link.py"
 cmd = "bash scripts/clean.sh"
 
 [tasks.rayforge]
-env = { GI_TYPELIB_PATH = "$(pkgconf --variable=typelibdir gobject-introspection-1.0)"}
+env = { GI_TYPELIB_PATH = "$CONDA_PREFIX/lib/girepository-1.0"}
 cmd = "scripts/with_gdk.sh rayforge"
 
 [tasks.testapp]
-env = { GI_TYPELIB_PATH = "$(pkgconf --variable=typelibdir gobject-introspection-1.0):/usr/lib/x86_64-linux-gnu/girepository-1.0"}
+env = { GI_TYPELIB_PATH = "$CONDA_PREFIX/lib/girepository-1.0:/usr/lib/x86_64-linux-gnu/girepository-1.0"}
 cmd = "scripts/with_gdk.sh"
 
 [tasks.test]
-env = { GI_TYPELIB_PATH = "$(pkgconf --variable=typelibdir gobject-introspection-1.0)"}
+env = { GI_TYPELIB_PATH = "$CONDA_PREFIX/lib/girepository-1.0"}
 cmd = "pytest -v --ignore=tests/ui_gtk"
 
 [tasks.uitest]
-env = { GI_TYPELIB_PATH = "$(pkgconf --variable=typelibdir gobject-introspection-1.0):/usr/lib/x86_64-linux-gnu/girepository-1.0"}
+env = { GI_TYPELIB_PATH = "$CONDA_PREFIX/lib/girepository-1.0:/usr/lib/x86_64-linux-gnu/girepository-1.0"}
 cmd = "pytest -v -m ui"
 
 [tasks.screenshot]
-env = { GI_TYPELIB_PATH = "$(pkgconf --variable=typelibdir gobject-introspection-1.0)"}
+env = { GI_TYPELIB_PATH = "$CONDA_PREFIX/lib/girepository-1.0"}
 cmd = "scripts/with_gdk.sh scripts/screenshot/cli.py"
 
 [tasks.wheel]

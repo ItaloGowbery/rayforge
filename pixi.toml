@@ -14,6 +14,10 @@ video = { features = ["video-tools"], solve-group = "video" }
 adwaita-icon-theme = "*"
 glib = "*"
 cairo = "*"
+# freetype 2.14.3 breaks Cairo's toy font API (ctx.text_extents/show_text
+# raise cairo.MemoryError: out of memory on every call). Pin below it until
+# upstream fixes the regression. See conda-forge freetype-feedstock.
+freetype = ">=2.14.1,<2.14.3"
 expat = "*"
 gettext = "*"
 gobject-introspection = "*"
